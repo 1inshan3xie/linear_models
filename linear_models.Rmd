@@ -1,0 +1,89 @@
+---
+title: "Simple document"
+author: Linshan Xie
+date: 2024-10-24
+output: github_document
+---
+
+```{r}
+library(ggplot2)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal()+theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+Load the key packages.
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+```
+
+Do some data cleaning
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood) |> 
+  filter(borough != "Staten Island") |> 
+  select(price, stars, borough, neighborhood, room_type) |>
+  mutate(
+    borough = fct_infreq(borough),
+    room_type = fct_infreq(room_type)
+  )
+```
+
+## fit some models
+Start relatively simple.
+```{r}
+fit = lm(price ~ stars, data = nyc_airbnb)
+
+summary(fit)
+
+names(fit)
+
+coef(fit)
+
+fit |>
+  broom::tidy() |>
+  select(term, estimate, p.value)
+
+fit|>
+  broom::glance()
+```
+
+```{r}
+fit = lm(price ~ stars + borough, data = nyc_airbnb)
+
+fit |>
+  broom::tidy() |>
+  select(term, estimate, p.value) |>
+  mutate(
+    term = str_replace(term, "borough", "Borough: ")
+  ) |>
+  knitr::kable(digits = 3)
+```
+
+
+
+
+
+
+
+
+
+
