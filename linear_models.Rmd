@@ -78,6 +78,35 @@ fit |>
   knitr::kable(digits = 3)
 ```
 
+## Some diagnostics
+
+Backtrack to some EDA
+```{r}
+nyc_airbnb |>
+  ggplot(aes(x = stars, y = price)) +
+  geom_point() +
+  stat_smooth(method = "lm")
+```
+
+
+Most diagnostics use residuals
+
+```{r}
+modelr::add_residuals(nyc_airbnb, fit) |>
+  ggplot(aes(x = borough, y = resid)) +
+  geom_violin() +
+  ylim(-200, 500)
+```
+
+residuals against fitted values
+
+```{r}
+nyc_airbnb |>
+  modelr::add_residuals(fit) |>
+  modelr::add_predictions(fit) |>
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point()
+```
 
 
 
