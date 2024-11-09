@@ -108,7 +108,103 @@ nyc_airbnb |>
   geom_point()
 ```
 
+## Hypothesis testing
+ 
+```{r}
+fit_null = lm(price ~ stars + borough, data = nyc_airbnb)
+fit_alt = lm(price ~ stars + borough + room_type, data = nyc_airbnb)
+```
 
+For single coefficients, look at the table
+
+```{r}
+fit |>
+  broom::tidy()
+```
+
+when adding more than one coefficients, use "ANOVA"
+```{r}
+fit_null |> 
+  broom::tidy()
+
+fit_alt |>
+  broom::tidy()
+
+anova(fit_null, fit_alt) |>
+  broom::tidy()
+```
+
+## Do effects differ aross boroughs
+```{r}
+nyc_airbnb |>
+  lm(price ~ stars * borough + room_type * borough, data = _) |> 
+  broom::tidy() |> 
+  knitr::kable(digits = 3)
+```
+
+Could just fit separate models.
+
+```{r}
+nyc_airbnb |>
+  filter(borough == "Manhattan") |>
+  lm(price ~ stars + room_type, data = _) |>
+  broom::tidy()
+```
+
+Get fancy and use list colums
+```{r}
+nyc_airbnb |>
+  nest(data = -borough) |>
+  mutate(
+    model = map(data, \(x) lm(price ~ stars + room_type, data = x)),
+    result = map(model, broom::tidy)
+  ) |>
+  select(borough, result) |>
+  unnest(result) |>
+  select(borough, term, estimate) |>
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  )
+```
+
+what about room type across manhattan neighborhoods?
+```{r}
+nyc_airbnb |>
+  filter(borough == "Manhattan",
+         neighborhood == "Chinatown") |>
+  lm(price ~ stars + room_type, data = _) |>
+  broom::tidy()
+```
+
+
+Let's do this for all neighborhoods
+```{r}
+manhattan_neighborhood_fit_df = 
+nyc_airbnb |>
+  filter(borough == "Manhattan") |>
+  nest(data = -(borough:neighborhood)) |>
+  mutate(
+    model = map(data, \(x) lm(price ~ stars + room_type, data = x)),
+    result = map(model, broom::tidy)
+  ) |>
+  select(neighborhood, result) |>
+  unnest(result)
+``` 
+
+Look at the effect of room_type
+```{r}
+manhattan_neighborhood_fit_df |>
+  filter(str_detect(term, "room_type")) |>
+  ggplot(aes(x = term, y = estimate)) +
+  geom_boxplot()
+```
+
+```{r}
+manhattan_neighborhood_fit_df |>
+  filter(str_detect(term, "room_type")) |>
+  filter(estimate > 0)
+```
 
 
 
