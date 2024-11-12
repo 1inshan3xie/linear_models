@@ -179,3 +179,77 @@ rmse(wiggly_mod, test_df)
 ```
 
     ## [1] 0.08848557
+
+## Repeat the train/test split
+
+``` r
+cv_df = 
+  crossv_mc(lidar_df, 100) |>
+  mutate(train = map(train, as_tibble),
+         test = map(test, as_tibble))
+
+cv_df |>
+  pull(train) |>
+  nth(2)
+```
+
+    ## # A tibble: 176 × 3
+    ##    range logratio    id
+    ##    <int>    <dbl> <int>
+    ##  1   390  -0.0504     1
+    ##  2   393  -0.0419     3
+    ##  3   394  -0.0510     4
+    ##  4   396  -0.0599     5
+    ##  5   397  -0.0284     6
+    ##  6   399  -0.0596     7
+    ##  7   400  -0.0399     8
+    ##  8   402  -0.0294     9
+    ##  9   403  -0.0395    10
+    ## 10   405  -0.0476    11
+    ## # ℹ 166 more rows
+
+Fit models, extract RMSEs
+
+``` r
+cv_res_df = 
+  cv_df |>
+  mutate(linear_mod = map(train, \(x) lm(logratio ~ range, data = x)),
+         smooth_mod = map(train, \(x) gam(logratio ~ s(range), data = x)),
+         wiggly_mod = map(train,\(x) gam(logratio ~ s(range, k = 30), sp = 10e-6, data = x))) |>
+  mutate(
+    rmse_linear = map2_dbl(linear_mod, test, rmse),
+    rmse_smooth = map2_dbl(smooth_mod, test, rmse),
+    rmse_wiggly = map2_dbl(wiggly_mod, test, rmse)
+  )
+```
+
+Looks at RMSE distribution
+
+``` r
+cv_res_df |>
+  select(starts_with("rmse")) |>
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) |>
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
+```
+
+<img src="cross_validation_files/figure-gfm/unnamed-chunk-15-1.png" width="90%" />
+
+See an example of Child Growth
+
+``` r
+child_growth = read_csv("./data/nepalese_children.csv")
+```
+
+    ## Rows: 2705 Columns: 5
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (5): age, sex, weight, height, armc
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
