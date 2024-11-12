@@ -158,15 +158,93 @@ cv_res_df |>
 
 See an example of Child Growth
 ```{r}
-child_growth = read_csv("./data/nepalese_children.csv")
+child_df = read_csv("./data/nepalese_children.csv") |>
+  mutate(weight_ch7 = (weight > 7) * (weight - 7))
 ```
 
+Look at the data
+```{r}
+child_df |>
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = 0.5)
+```
 
+```{r}
+linear_mod = lm(armc ~ weight, data = child_df)
+pwl_mod = lm(armc ~ weight + weight_ch7, data = child_df)
+smooth_mod = gam(armc ~ s(weight), data = child_df)
+```
 
+Look at the models
+```{r}
+child_df |>
+  add_predictions(linear_mod) |>
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red")
+```
 
+```{r}
+child_df |>
+  add_predictions(pwl_mod) |>
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red")
+```
 
+```{r}
+child_df |>
+  add_predictions(smooth_mod) |>
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red")
+```
 
+comtract
+```{r}
+child_df |> 
+  gather_predictions(linear_mod, pwl_mod, smooth_mod) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red") + 
+  facet_grid(~model)
+```
 
+CV to select models
+```{r}
+cv_df =
+  crossv_mc(child_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+Apply models and extract RMSE
+```{r}
+cv_res_df = cv_df |>
+  mutate(
+    linear_mod  = map(train, \(x) lm(armc ~ weight, data = x)),
+    pwl_mod     = map(train, \(x) lm(armc ~ weight + weight_ch7, data = x)),
+    smooth_mod  = map(train, \(x) gam(armc ~ s(weight), data = x))) |> 
+  
+  mutate(
+    rmse_linear = map2_dbl(linear_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_pwl    = map2_dbl(pwl_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_smooth = map2_dbl(smooth_mod, test, \(mod, df) rmse(model = mod, data = df))) 
+```
+
+```{r}
+cv_res_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
 
 
 
