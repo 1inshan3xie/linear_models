@@ -1,0 +1,215 @@
+---
+title: "Bootstrap"
+author: Linshan Xie
+date: 2024-10-24
+output: github_document
+---
+
+```{r}
+library(ggplot2)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal()+theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+Load the key packages.
+```{r}
+library(tidyverse)
+library(modelr)
+library(p8105.datasets)
+
+set.seed(1)
+```
+
+do some bootstrapping!
+
+make up some data
+```{r}
+n_samp = 250
+
+sim_df_constant = 
+  tibble(
+    x = rnorm(n_samp, 1, 1),
+    error = rnorm(n_samp, 0, 1),
+    y = 2 + 3 * x + error
+  )
+
+sim_df_nonconstant = sim_df_constant |> 
+  mutate(
+  error = error * .75 * x,
+  y = 2 + 3 * x + error
+)
+```
+
+Let's look at these
+```{r}
+sim_df_constant |>
+  ggplot(aes(x = x, y = y)) +
+  geom_point(alpha = .5) +
+  stat_smooth(method = "lm")
+```
+
+```{r}
+sim_df_nonconstant |>
+  ggplot(aes(x = x, y = y)) +
+  geom_point(alpha = .5) +
+  stat_smooth(method = "lm")
+```
+
+Look at regression result
+```{r}
+sim_df_constant |>
+  lm(y ~ x, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digit = 3)
+```
+
+```{r}
+sim_df_nonconstant |>
+  lm(y ~ x, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digit = 3)
+```
+
+## draw a bootstrap sample
+```{r}
+boot_sample = function(df) {
+  boot_df = 
+    sample_frac(df, replace = TRUE) |>
+    arrange(x)
+  return(boot_df)
+}
+```
+
+try running this
+```{r}
+sim_df_nonconstant |>
+  boot_sample() |>
+  ggplot(aes(x = x, y = y)) +
+  geom_point(alpha = .5) +
+  stat_smooth(method = "lm")
+```
+
+can we do this as a part of an analysis
+```{r}
+sim_df_nonconstant |>
+  boot_sample() |>
+  lm(y ~ x, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digit = 3)
+```
+
+## Bootstrap a lot
+```{r}
+boot_straps =
+  tibble(
+    strap_number = 1:1000
+  ) |>
+  mutate(
+    strap_samp = map(strap_number, \(i) boot_sample(df = sim_df_nonconstant)),
+    models = map(strap_samp, \(df) lm(y ~ x, data = df)),
+    result = map(models, broom::tidy))
+```
+
+```{r}
+bootstrap_result = 
+  boot_straps |>
+  select(strap_number, result) |>
+  unnest(result) |>
+  group_by(term) |>
+  summarize(
+    boot_se = sd(estimate)
+  ) |>
+  knitr::kable(digits = 3)
+```
+
+do this all using modelr
+```{r}
+boot_straps = 
+  sim_df_nonconstant |>
+  modelr::bootstrap(1000) |>
+  mutate(
+    strap = map(strap, as_tibble),
+    models = map(strap, \(df) lm(y ~ x, data = df)),
+    results = map(models, broom::tidy)
+  ) |>
+  select(.id, results) |>
+  unnest(results)
+```
+
+## what you want to report
+```{r}
+boot_straps |>
+  group_by(term) |>
+  summarize(
+    boot_est = mean(estimate),
+    boot_se = sd(estimate),
+    boot_ci_ll = quantile(estimate, 0.025),
+    boot_ci_ul = quantile(estimate, 0.975)
+  )
+```
+
+## Look at the airbnb data
+```{r}
+data("nyc_airbnb")
+
+manhattan_df = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood) |> 
+  filter(borough == "Manhattan") |> 
+  drop_na(price, stars) |> 
+  select(price, stars, room_type)
+```
+
+plot the data
+```{r}
+manhattan_df |>
+  ggplot(aes(x = stars, y = price)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE)
+```
+
+fit a regression
+```{r}
+manhattan_df |>
+  lm(price ~ stars + room_type, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digits = 3)
+```
+
+bootstrap for better inference
+```{r}
+manhattan_df |>
+  modelr::bootstrap(10) |>
+  mutate(strap = map(strap, as_tibble),
+         models = map(strap, \(df) lm(price ~ stars + room_type, data = df)),
+         results = map(models, broom::tidy)) |>
+  select(.id, results) |>
+  unnest(results) |>
+  filter(term == "stars") |>
+  ggplot(aes(estimate)) +
+  geom_density()
+```
+
+
+
+
+
+
+
+
+
